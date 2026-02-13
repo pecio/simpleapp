@@ -37,3 +37,4 @@ dist/
 # OS files
 Thumbs.db
 .DS_Store
+/go-k8s-experiments
