@@ -3,14 +3,16 @@ FROM docker.io/library/golang:1.25.7 AS builder
 
 COPY go.mod go.sum *.go /go/src/
 
+ENV CGO_ENABLED=0
+
 WORKDIR /go/src
 
-RUN /usr/bin/env CGO_ENABLED=0 go build -o app .
+RUN go build -o simpleappcontroller .
 
 
 
 FROM scratch
 
-COPY --from=builder --chmod=0755 /go/src/app /app
+COPY --from=builder --chmod=0755 /go/src/simpleappcontroller /simpleappcontroller
 
-CMD [ "/app" ]
+CMD [ "/simpleappcontroller" ]

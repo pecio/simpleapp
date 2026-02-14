@@ -1,0 +1,315 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: simpleapps.apps.raulpedroche.es
+spec:
+  group: apps.raulpedroche.es
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              description: >
+                Describes the configuration of a Simple App. These contain a Deployment where each Pod has a single
+                container and exposes one or more ports.
+              properties:
+                image:
+                  type: string
+                  description: >
+                    Container image name.
+                ports:
+                  type: array
+                  description: >
+                    List of ports to expose from the container.
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: >
+                          If specified, this must be an IANA_SVC_NAME and unique within the pod.
+                      hostPort:
+                        type: integer
+                        description: >
+                          Number of port to expose on the host. If specified, this must be a valid
+                          port number, 0 < x < 65536.
+                        minimum: 1
+                        maximum: 65535
+                      containerPort:
+                        type: integer
+                        description: >
+                          Number of port to expose on the pod's IP address. This must be a valid port
+                          number, 0 < x < 65536.
+                        minimum: 1
+                        maximum: 65535
+                      protocol:
+                        type: string
+                        description: >
+                          Protocol for port. Must be UDP, TCP, or SCTP. Defaults to "TCP".
+                        enum:
+                          - SCTP
+                          - TCP
+                          - UDP
+                        default: TCP
+                    required:
+                      - containerPort
+                      - hostPort
+                replicas:
+                  type: integer
+                  description: >
+                    Number of desired pods.
+                  default: 1
+                  minimum: 0
+                env:
+                  type: array
+                  description: >
+                    Environment variables to set in container.
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: >
+                          Name of the environment variable.
+                      value:
+                        type: string
+                        description: >
+                          Value (contents) of the environment variable.
+                    required:
+                      - name
+                      - value
+                volumes:
+                  type: array
+                  description: >
+                    List of volumes mounted by the container belonging to the pod.
+                  items:
+                    type: object
+                    properties:
+                      mountPath:
+                        type: string
+                        description: >
+                          Path within the container at which the volume should be mounted.
+                        pattern: '^(/[A-Za-z0-9]+)*$'
+                      emptyDir:
+                        type: object
+                        description: >
+                          emptyDir represents a temporary directory that shares a pod's lifetime.
+                        properties:
+                          medium:
+                            type: string
+                            description: >
+                              medium represents what type of storage medium should back this directory.
+                              The default is "" which means to use the node's default medium. Must be an
+                              empty string (default) or Memory.
+                          sizeLimit:
+                            type: string
+                            description: >
+                              sizeLimit is the total amount of local storage required for this EmptyDir volume.
+                      configMap:
+                        type: object
+                        description: >
+                          Adapts a ConfigMap into a volume.
+                        properties:
+                          defaultMode:
+                            type: integer
+                            description: >
+                              Mode bits used to set permissions on created files by default.
+                              Must be an octal value between 0000 and 0777.
+                            minimum: 0
+                            maximum: 511
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              description: >
+                                If unspecified, each key-value pair in the Data field of the
+                                referenced ConfigMap will be projected into the volume as a file whose name
+                                is the key and content is the value.
+                                If specified, the listed keys will be projected into the specified paths,
+                                and unlisted keys will not be present.
+                              properties:
+                                key:
+                                  type: string
+                                  description: >
+                                    The key to project
+                                mode:
+                                  type: integer
+                                  description: >
+                                    Mode bits used to set permissions on this file.
+                                    Must be an octal value between 0000 and 0777.
+                                  minimum: 0
+                                  maximum: 511
+                                path:
+                                  type: string
+                                  description: >
+                                    It is the relative path of the file to map the key to. May not be an
+                                    absolute path. May not contain the path element '..'. May not start with the
+                                    string '..'.
+                              required:
+                                - key
+                                - path
+                          name:
+                            type: string
+                            description: >
+                              Name of the referent.
+                          optional:
+                            type: boolean
+                            description: >
+                              Specify whether the ConfigMap or its values must be defined.
+                            default: false
+                      persistentVolumeClaim:
+                        type: object
+                        description: >
+                          Represents a reference to a PersistentVolumeClaim in the same Namespace.
+                        properties:
+                          claimName:
+                            type: string
+                            description: >
+                              The name of a PersistentVolumeClaim in the same namespace
+                          readOnly:
+                            type: boolean
+                            description: >
+                              Will force the ReadOnly setting in VolumeMounts. Default false
+                            default: false
+                        required:
+                          - claimName
+                      secret:
+                        type: object
+                        description: >
+                          Represents a secret that should populate this volume.
+                        properties:
+                          defaultMode:
+                            type: integer
+                            description: >
+                              Mode bits used to set permissions on created files by default.
+                              Must be an octal value between 0000 and 0777.
+                            minimum: 0
+                            maximum: 511
+                          items:
+                            type: array
+                            description: >
+                              If unspecified, each key-value pair in the Data field of the
+                              referenced Secret will be projected into the volume as a file whose name is
+                              the key and content is the value.
+                            items:
+                              type: object
+                              properties:
+                                key:
+                                  type: string
+                                  description: >
+                                    The key to project.
+                                mode:
+                                  type: integer
+                                  description: >
+                                    Mode bits used to set permissions on this file. Must be an
+                                    octal value between 0000 and 0777.
+                                  minimum: 0
+                                  maximum: 511
+                                path:
+                                  type: string
+                                  description: >
+                                    Relative path of the file to map the key to.
+                                    May not be an absolute path.
+                                    May not contain the path element '..'.
+                                    May not start with the string '..'.
+                              required:
+                                - key
+                                - path
+                          name:
+                            type: string
+                            description: >
+                              Name of the referent.
+                          optional:
+                            type: boolean
+                            description: >
+                              Specify whether the Secret or its values must be defined.
+                            default: false
+                    oneOf:
+                      - required:
+                          - mountPath
+                          - emptyDir
+                      - required:
+                          - mountPath
+                          - configMap
+                      - required:
+                          - mountPath
+                          - persistentVolumeClaim
+                      - required:
+                          - mountPath
+                          - secret
+              required:
+                - image
+
+  scope: Namespaced
+  names:
+    plural: simpleapps
+    singular: simpleapp
+    kind: SimpleApp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: simpleapp-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: simpleapp-rolebinding
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: simpleapp-role
+subjects:
+- kind: ServiceAccount
+  name: simpleapp-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: simpleapp-role
+  namespace: default
+rules:
+- apiGroups: ["apps.raulpedroche.es"]
+  resources: ["simpleapps"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "create", "delete", "update", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simpleapp-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simpleapp-controller
+  template:
+    metadata:
+      labels:
+        app: simpleapp-controller
+    spec:
+      serviceAccountName: simpleapp-sa
+      containers:
+      - name: simpleapp-controller
+        image: simpleappcontroller:latest
+        imagePullPolicy: Never
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
