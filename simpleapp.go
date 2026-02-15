@@ -98,46 +98,12 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		volumes := make([]corev1.Volume, 0, len(sa.Spec.Volumes))
 		volumeMounts := make([]corev1.VolumeMount, 0, len(sa.Spec.Volumes))
 		for _, saVolume := range sa.Spec.Volumes {
-			volName := uuid.NewSHA1(uuid.Max, []byte(saVolume.MountPath)).String()
-			volume := corev1.Volume{
-				Name: volName,
-			}
-			if saVolume.ConfigMap != nil {
-				configMapVolumeSource := corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: saVolume.ConfigMap.Name},
-					Items:                saVolume.ConfigMap.Items,
-					DefaultMode:          saVolume.ConfigMap.DefaultMode,
-					Optional:             saVolume.ConfigMap.Optional,
-				}
-				volume.ConfigMap = &configMapVolumeSource
-			} else if saVolume.EmptyDir != nil {
-				emptyDirVolumeSource := corev1.EmptyDirVolumeSource{
-					Medium:    saVolume.EmptyDir.Medium,
-					SizeLimit: saVolume.EmptyDir.SizeLimit,
-				}
-				volume.EmptyDir = &emptyDirVolumeSource
-			} else if saVolume.PersistentVolumeClaim != nil {
-				persistentVolumeClaimVolumeSource := corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: saVolume.PersistentVolumeClaim.ClaimName,
-					ReadOnly:  saVolume.PersistentVolumeClaim.ReadOnly,
-				}
-				volume.PersistentVolumeClaim = &persistentVolumeClaimVolumeSource
-			} else if saVolume.Secret != nil {
-				secretVolumeSource := corev1.SecretVolumeSource{
-					SecretName:  saVolume.Secret.Name,
-					Items:       saVolume.Secret.Items,
-					DefaultMode: saVolume.Secret.DefaultMode,
-					Optional:    saVolume.Secret.Optional,
-				}
-				volume.Secret = &secretVolumeSource
-			} else {
-				return fmt.Errorf("volume for path %v in %v.%v does not have type", saVolume.MountPath, sa.Metadata.Namespace, sa.Metadata.Name)
+			volume, volumeMount, err := sa.makeVolume(saVolume)
+			if err != nil {
+				return err
 			}
 			volumes = append(volumes, volume)
-			volumeMounts = append(volumeMounts, corev1.VolumeMount{
-				Name:      volName,
-				MountPath: saVolume.MountPath,
-			})
+			volumeMounts = append(volumeMounts, volumeMount)
 		}
 		podSpec := corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -232,6 +198,49 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		log.Printf("Would update Service %v.%v", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
 	}
 	return nil
+}
+
+func (sa SimpleApp) makeVolume(saVolume simpleAppVolume) (corev1.Volume, corev1.VolumeMount, error) {
+	volName := uuid.NewSHA1(uuid.Max, []byte(saVolume.MountPath)).String()
+	volume := corev1.Volume{
+		Name: volName,
+	}
+	if saVolume.ConfigMap != nil {
+		configMapVolumeSource := corev1.ConfigMapVolumeSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: saVolume.ConfigMap.Name},
+			Items:                saVolume.ConfigMap.Items,
+			DefaultMode:          saVolume.ConfigMap.DefaultMode,
+			Optional:             saVolume.ConfigMap.Optional,
+		}
+		volume.ConfigMap = &configMapVolumeSource
+	} else if saVolume.EmptyDir != nil {
+		emptyDirVolumeSource := corev1.EmptyDirVolumeSource{
+			Medium:    saVolume.EmptyDir.Medium,
+			SizeLimit: saVolume.EmptyDir.SizeLimit,
+		}
+		volume.EmptyDir = &emptyDirVolumeSource
+	} else if saVolume.PersistentVolumeClaim != nil {
+		persistentVolumeClaimVolumeSource := corev1.PersistentVolumeClaimVolumeSource{
+			ClaimName: saVolume.PersistentVolumeClaim.ClaimName,
+			ReadOnly:  saVolume.PersistentVolumeClaim.ReadOnly,
+		}
+		volume.PersistentVolumeClaim = &persistentVolumeClaimVolumeSource
+	} else if saVolume.Secret != nil {
+		secretVolumeSource := corev1.SecretVolumeSource{
+			SecretName:  saVolume.Secret.Name,
+			Items:       saVolume.Secret.Items,
+			DefaultMode: saVolume.Secret.DefaultMode,
+			Optional:    saVolume.Secret.Optional,
+		}
+		volume.Secret = &secretVolumeSource
+	} else {
+		return corev1.Volume{}, corev1.VolumeMount{}, fmt.Errorf("volume for path %v in %v.%v does not have type", saVolume.MountPath, sa.Metadata.Namespace, sa.Metadata.Name)
+	}
+	volumeMount := corev1.VolumeMount{
+		Name:      volName,
+		MountPath: saVolume.MountPath,
+	}
+	return volume, volumeMount, nil
 }
 
 func (sa SimpleApp) delete(clientset *kubernetes.Clientset) error {
