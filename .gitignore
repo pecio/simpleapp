@@ -38,3 +38,4 @@ dist/
 Thumbs.db
 .DS_Store
 /go-k8s-experiments
+simpleapp
