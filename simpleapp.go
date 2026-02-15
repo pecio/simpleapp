@@ -92,6 +92,13 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if err != nil {
 			return err
 		}
+		if len(deployment.Spec.Template.Spec.Volumes) != len(sa.Spec.Volumes) {
+			// We were provided with dupplicate MountPath(s)
+			err := sa.fixVolumes(clientset)
+			if err != nil {
+				return err
+			}
+		}
 		_, err = clientset.AppsV1().Deployments(sa.Metadata.Namespace).Create(context.TODO(), &deployment, metav1.CreateOptions{})
 		if err != nil {
 			return err
@@ -109,6 +116,12 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		newDeployment, err := sa.buildDeployment()
 		if err != nil {
 			return err
+		}
+		if len(newDeployment.Spec.Template.Spec.Volumes) != len(sa.Spec.Volumes) {
+			err := sa.fixVolumes(clientset)
+			if err != nil {
+				return err
+			}
 		}
 		if !utils.DeploymentEqual(newDeployment, *oldDeployment) {
 			_, err = clientset.AppsV1().Deployments(oldDeployment.ObjectMeta.Namespace).Update(context.TODO(), &newDeployment, metav1.UpdateOptions{})
@@ -258,10 +271,17 @@ func (sa SimpleApp) buildDeployment() (appsv1.Deployment, error) {
 	}
 	volumes := make([]corev1.Volume, 0, len(sa.Spec.Volumes))
 	volumeMounts := make([]corev1.VolumeMount, 0, len(sa.Spec.Volumes))
+outer:
 	for _, saVolume := range sa.Spec.Volumes {
 		volume, volumeMount, err := sa.makeVolume(saVolume)
 		if err != nil {
 			return appsv1.Deployment{}, err
+		}
+		// Check duplicate MountPaths
+		for _, vM := range volumeMounts {
+			if vM.MountPath == volumeMount.MountPath {
+				continue outer
+			}
 		}
 		volumes = append(volumes, volume)
 		volumeMounts = append(volumeMounts, volumeMount)
@@ -398,16 +418,44 @@ outer:
 		newPorts = append(newPorts, port)
 	}
 
+	log.Printf("Removing %v duplicate port(s) from SimpleApp %v.%v", len(sa.Spec.Ports)-len(newPorts), sa.Metadata.Namespace, sa.Metadata.Name)
 	sa.Spec.Ports = newPorts
 
 	payload, err := json.Marshal(sa)
 	if err != nil {
 		return err
 	}
-	log.Printf("Going to update SimpleApp %v.%v", sa.Metadata.Namespace, sa.Metadata.Name)
+
 	result := clientset.RESTClient().Put().AbsPath("/apis/" + resourcePath).Namespace(sa.Metadata.Namespace).Resource(plural).Name(sa.Metadata.Name).Body(payload).Do(context.TODO())
 	if result.Error() != nil {
-		log.Print("Update errored")
+		return result.Error()
+	}
+	return nil
+}
+
+func (sa SimpleApp) fixVolumes(clientset *kubernetes.Clientset) error {
+	newVolumes := make([]simpleAppVolume, 0)
+outer:
+	for _, volume := range sa.Spec.Volumes {
+		for _, stored := range newVolumes {
+			if volume.MountPath == stored.MountPath {
+				continue outer
+			}
+		}
+		newVolumes = append(newVolumes, volume)
+	}
+
+	log.Printf("Removing %v duplicate volume(s) from SimpleApp %v.%v", len(sa.Spec.Volumes)-len(newVolumes), sa.Metadata.Namespace, sa.Metadata.Name)
+
+	sa.Spec.Volumes = newVolumes
+
+	payload, err := json.Marshal(sa)
+	if err != nil {
+		return err
+	}
+
+	result := clientset.RESTClient().Put().AbsPath("/apis/" + resourcePath).Namespace(sa.Metadata.Namespace).Resource(plural).Name(sa.Metadata.Name).Body(payload).Do(context.TODO())
+	if result.Error() != nil {
 		return result.Error()
 	}
 	return nil
