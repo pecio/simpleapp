@@ -89,7 +89,7 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if err != nil {
 			return err
 		}
-		_, err = clientset.AppsV1().Deployments(sa.Metadata.Namespace).Create(context.Background(), &deployment, metav1.CreateOptions{})
+		_, err = clientset.AppsV1().Deployments(sa.Metadata.Namespace).Create(context.TODO(), &deployment, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -108,7 +108,11 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 			return err
 		}
 		if !utils.DeploymentEqual(newDeployment, *oldDeployment) {
-			log.Printf("Deployment %v.%v changed", oldDeployment.ObjectMeta.Namespace, oldDeployment.ObjectMeta.Name)
+			_, err = clientset.AppsV1().Deployments(oldDeployment.ObjectMeta.Namespace).Update(context.TODO(), &newDeployment, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+			log.Printf("Deployment %v.%v updated", oldDeployment.ObjectMeta.Namespace, oldDeployment.ObjectMeta.Name)
 		}
 	}
 
@@ -132,7 +136,11 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 
 		newService := sa.buildService()
 		if !utils.ServicesEqual(newService, *oldService) {
-			log.Printf("Service %v.%v changed", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
+			_, err = clientset.CoreV1().Services(oldService.ObjectMeta.Namespace).Update(context.TODO(), &newService, metav1.UpdateOptions{})
+			if err != nil {
+				return err
+			}
+			log.Printf("Service %v.%v updated", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
 		}
 	}
 	return nil
