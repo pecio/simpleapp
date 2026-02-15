@@ -2,6 +2,7 @@
 FROM docker.io/library/golang:1.25.7 AS builder
 
 COPY go.mod go.sum *.go /go/src/
+COPY utils/*.go /go/src/utils/
 
 ENV CGO_ENABLED=0
 
