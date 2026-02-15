@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/pecio/simpleapp/utils"
@@ -121,7 +122,10 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 	oldService, err := clientset.CoreV1().Services(sa.Metadata.Namespace).Get(context.TODO(), sa.Metadata.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		// Create Service
-		service := sa.buildService()
+		service, err := sa.buildService()
+		if err != nil {
+			return err
+		}
 		newService, err := clientset.CoreV1().Services(sa.Metadata.Namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 		if err != nil {
 			return err
@@ -135,7 +139,10 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 			return fmt.Errorf("found Service %v.%v not managed by us", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
 		}
 
-		newService := sa.buildService()
+		newService, err := sa.buildService()
+		if err != nil {
+			return nil
+		}
 		if !utils.ServicesEqual(newService, *oldService) {
 			_, err = clientset.CoreV1().Services(oldService.ObjectMeta.Namespace).Update(context.TODO(), &newService, metav1.UpdateOptions{})
 			if err != nil {
@@ -147,7 +154,7 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 	return nil
 }
 
-func (sa SimpleApp) buildService() corev1.Service {
+func (sa SimpleApp) buildService() (corev1.Service, error) {
 	servicePorts := make([]corev1.ServicePort, 0, len(sa.Spec.Ports))
 	for _, saPort := range sa.Spec.Ports {
 		// Spec forces non-empty names if more than 1 port defined
@@ -157,6 +164,32 @@ func (sa SimpleApp) buildService() corev1.Service {
 				portName = fmt.Sprintf("tcp-%s", saPort.ContainerPort)
 			} else {
 				portName = strings.ToLower(fmt.Sprintf("%s-%d", saPort.Protocol, saPort.ContainerPort))
+			}
+			// Check we have not generated a duplicate name
+			for _, sp := range servicePorts {
+				if portName == sp.Name {
+					// Add b if it ends in a digit, increase end letter if it ends in a letter
+					// That is "tcp-443" -> "tcp-443b", "tcp-443b" -> "tcp-443c"
+					matched, err := regexp.MatchString("[0-9]$", portName)
+					if err != nil {
+						return corev1.Service{}, err
+					}
+					if matched {
+						portName = portName + "b"
+					} else {
+						// This does support UTF-8 but we do not need it
+						last := portName[len(portName)-1:][0] + 1
+						// Safeguard: use hash if we have surpassed 'z'
+						if last > 'z' {
+							// The following should be unique as Services reject duplicate HostPorts
+							// so if it is not unique it would fail anyway.
+							suffix := rand.SafeEncodeString(fmt.Sprintf("%s-%d-%d", saPort.Protocol, saPort.HostPort, saPort.ContainerPort))
+							portName = fmt.Sprintf("%s%s", portName[:len(portName)-1], suffix)
+						} else {
+							portName = fmt.Sprintf("%s%c", portName[:len(portName)-1], last)
+						}
+					}
+				}
 			}
 		}
 
@@ -180,7 +213,7 @@ func (sa SimpleApp) buildService() corev1.Service {
 			Type:     corev1.ServiceTypeNodePort,
 		},
 	}
-	return service
+	return service, nil
 }
 
 func (sa SimpleApp) labels() map[string]string {
