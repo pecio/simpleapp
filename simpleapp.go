@@ -85,6 +85,13 @@ type simpleAppVolumePersistentVolumeClaim struct {
 }
 
 func (sa *SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
+	// Sanity checks - fix duplicate Volumes or Ports
+	fv := sa.fixVolumes()
+	fp := sa.fixPorts()
+	if fv || fp {
+		sa.updateApp(clientset)
+	}
+
 	// Check if Deployment exists
 	oldDeployment, err := clientset.AppsV1().Deployments(sa.Metadata.Namespace).Get(context.TODO(), sa.Metadata.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
@@ -92,13 +99,7 @@ func (sa *SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if err != nil {
 			return err
 		}
-		if len(deployment.Spec.Template.Spec.Volumes) != len(sa.Spec.Volumes) {
-			// We were provided with dupplicate MountPath(s)
-			err := sa.fixVolumes(clientset)
-			if err != nil {
-				return err
-			}
-		}
+
 		_, err = clientset.AppsV1().Deployments(sa.Metadata.Namespace).Create(context.TODO(), &deployment, metav1.CreateOptions{})
 		if err != nil {
 			return err
@@ -117,12 +118,7 @@ func (sa *SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if err != nil {
 			return err
 		}
-		if len(newDeployment.Spec.Template.Spec.Volumes) != len(sa.Spec.Volumes) {
-			err := sa.fixVolumes(clientset)
-			if err != nil {
-				return err
-			}
-		}
+
 		if !utils.DeploymentEqual(newDeployment, *oldDeployment) {
 			_, err = clientset.AppsV1().Deployments(oldDeployment.ObjectMeta.Namespace).Update(context.TODO(), &newDeployment, metav1.UpdateOptions{})
 			if err != nil {
@@ -140,13 +136,7 @@ func (sa *SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if err != nil {
 			return err
 		}
-		if len(service.Spec.Ports) != len(sa.Spec.Ports) {
-			// We have to drop the duplicate port(s) from the SimpleApp
-			err := sa.fixPorts(clientset)
-			if err != nil {
-				return err
-			}
-		}
+
 		newService, err := clientset.CoreV1().Services(sa.Metadata.Namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 		if err != nil {
 			return err
@@ -164,13 +154,7 @@ func (sa *SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if err != nil {
 			return nil
 		}
-		if len(newService.Spec.Ports) != len(sa.Spec.Ports) {
-			// As above, we have to drop the duplicate port(s) from the SimpleApp
-			err := sa.fixPorts(clientset)
-			if err != nil {
-				return err
-			}
-		}
+
 		if !utils.ServicesEqual(newService, *oldService) {
 			_, err = clientset.CoreV1().Services(oldService.ObjectMeta.Namespace).Update(context.TODO(), &newService, metav1.UpdateOptions{})
 			if err != nil {
@@ -184,14 +168,8 @@ func (sa *SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 
 func (sa *SimpleApp) buildService() (corev1.Service, error) {
 	servicePorts := make([]corev1.ServicePort, 0, len(sa.Spec.Ports))
-outer:
+
 	for _, saPort := range sa.Spec.Ports {
-		// Check we are not receiving a duplicate HostPort as Service would reject it
-		for _, sp := range servicePorts {
-			if saPort.Protocol == sp.Protocol && saPort.HostPort == sp.Port {
-				continue outer
-			}
-		}
 		// Spec forces non-empty names if more than 1 port defined
 		portName := saPort.Name
 		if len(sa.Spec.Ports) > 1 && saPort.Name == "" {
@@ -216,8 +194,7 @@ outer:
 						last := portName[len(portName)-1:][0] + 1
 						// Safeguard: use hash if we have surpassed 'z'
 						if last > 'z' {
-							// The following should be unique as Services reject duplicate HostPorts
-							// so if it is not unique it would fail anyway.
+							// The following should be unique as we have removed duplicate HostPorts
 							suffix := rand.SafeEncodeString(fmt.Sprintf("%s-%d-%d", saPort.Protocol, saPort.HostPort, saPort.ContainerPort))
 							portName = fmt.Sprintf("%s%s", portName[:len(portName)-1], suffix)
 						} else {
@@ -271,17 +248,11 @@ func (sa *SimpleApp) buildDeployment() (appsv1.Deployment, error) {
 	}
 	volumes := make([]corev1.Volume, 0, len(sa.Spec.Volumes))
 	volumeMounts := make([]corev1.VolumeMount, 0, len(sa.Spec.Volumes))
-outer:
+
 	for _, saVolume := range sa.Spec.Volumes {
 		volume, volumeMount, err := sa.makeVolume(saVolume)
 		if err != nil {
 			return appsv1.Deployment{}, err
-		}
-		// Check duplicate MountPaths
-		for _, vM := range volumeMounts {
-			if vM.MountPath == volumeMount.MountPath {
-				continue outer
-			}
 		}
 		volumes = append(volumes, volume)
 		volumeMounts = append(volumeMounts, volumeMount)
@@ -406,7 +377,7 @@ func (sa SimpleApp) delete(clientset *kubernetes.Clientset) error {
 	return nil
 }
 
-func (sa *SimpleApp) fixPorts(clientset *kubernetes.Clientset) error {
+func (sa *SimpleApp) fixPorts() bool {
 	newPorts := make([]simpleAppPort, 0)
 outer:
 	for _, port := range sa.Spec.Ports {
@@ -418,22 +389,17 @@ outer:
 		newPorts = append(newPorts, port)
 	}
 
+	if len(sa.Spec.Ports) == len(newPorts) {
+		return false
+	}
+
 	log.Printf("Removing %v duplicate port(s) from SimpleApp %v.%v", len(sa.Spec.Ports)-len(newPorts), sa.Metadata.Namespace, sa.Metadata.Name)
 	sa.Spec.Ports = newPorts
 
-	payload, err := json.Marshal(sa)
-	if err != nil {
-		return err
-	}
-
-	result := clientset.RESTClient().Put().AbsPath("/apis/" + resourcePath).Namespace(sa.Metadata.Namespace).Resource(plural).Name(sa.Metadata.Name).Body(payload).Do(context.TODO())
-	if result.Error() != nil {
-		return result.Error()
-	}
-	return nil
+	return true
 }
 
-func (sa *SimpleApp) fixVolumes(clientset *kubernetes.Clientset) error {
+func (sa *SimpleApp) fixVolumes() bool {
 	newVolumes := make([]simpleAppVolume, 0)
 outer:
 	for _, volume := range sa.Spec.Volumes {
@@ -445,10 +411,17 @@ outer:
 		newVolumes = append(newVolumes, volume)
 	}
 
-	log.Printf("Removing %v duplicate volume(s) from SimpleApp %v.%v", len(sa.Spec.Volumes)-len(newVolumes), sa.Metadata.Namespace, sa.Metadata.Name)
+	if len(sa.Spec.Volumes) == len(newVolumes) {
+		return false
+	}
 
+	log.Printf("Removing %v duplicate volume(s) from SimpleApp %v.%v", len(sa.Spec.Volumes)-len(newVolumes), sa.Metadata.Namespace, sa.Metadata.Name)
 	sa.Spec.Volumes = newVolumes
 
+	return true
+}
+
+func (sa *SimpleApp) updateApp(clientset *kubernetes.Clientset) error {
 	payload, err := json.Marshal(sa)
 	if err != nil {
 		return err
