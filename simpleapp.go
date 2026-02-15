@@ -116,32 +116,7 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 	oldService, err := clientset.CoreV1().Services(sa.Metadata.Namespace).Get(context.TODO(), sa.Metadata.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		// Create Service
-		servicePorts := make([]corev1.ServicePort, 0, len(sa.Spec.Ports))
-		for _, saPort := range sa.Spec.Ports {
-			servicePort := corev1.ServicePort{
-				Name:     saPort.Name,
-				Protocol: saPort.Protocol,
-				Port:     saPort.HostPort,
-			}
-			if saPort.Name != "" {
-				servicePort.TargetPort = intstr.FromString(saPort.Name)
-			} else {
-				servicePort.TargetPort = intstr.FromInt32(saPort.ContainerPort)
-			}
-			servicePorts = append(servicePorts, servicePort)
-		}
-		service := corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: sa.Metadata.Namespace,
-				Name:      sa.Metadata.Name,
-				Labels:    sa.labels(),
-			},
-			Spec: corev1.ServiceSpec{
-				Selector: sa.labels(),
-				Ports:    servicePorts,
-				Type:     corev1.ServiceTypeNodePort,
-			},
-		}
+		service := sa.buildService()
 		newService, err := clientset.CoreV1().Services(sa.Metadata.Namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 		if err != nil {
 			return err
@@ -157,6 +132,36 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		log.Printf("Would update Service %v.%v", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
 	}
 	return nil
+}
+
+func (sa SimpleApp) buildService() corev1.Service {
+	servicePorts := make([]corev1.ServicePort, 0, len(sa.Spec.Ports))
+	for _, saPort := range sa.Spec.Ports {
+		servicePort := corev1.ServicePort{
+			Name:     saPort.Name,
+			Protocol: saPort.Protocol,
+			Port:     saPort.HostPort,
+		}
+		if saPort.Name != "" {
+			servicePort.TargetPort = intstr.FromString(saPort.Name)
+		} else {
+			servicePort.TargetPort = intstr.FromInt32(saPort.ContainerPort)
+		}
+		servicePorts = append(servicePorts, servicePort)
+	}
+	service := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: sa.Metadata.Namespace,
+			Name:      sa.Metadata.Name,
+			Labels:    sa.labels(),
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: sa.labels(),
+			Ports:    servicePorts,
+			Type:     corev1.ServiceTypeNodePort,
+		},
+	}
+	return service
 }
 
 func (sa SimpleApp) labels() map[string]string {
