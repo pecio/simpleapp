@@ -84,7 +84,7 @@ type simpleAppVolumePersistentVolumeClaim struct {
 	ReadOnly  *bool  `json:"readOnly,omitempty"`
 }
 
-func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
+func (sa *SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 	// Check if Deployment exists
 	oldDeployment, err := clientset.AppsV1().Deployments(sa.Metadata.Namespace).Get(context.TODO(), sa.Metadata.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
@@ -182,7 +182,7 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 	return nil
 }
 
-func (sa SimpleApp) buildService() (corev1.Service, error) {
+func (sa *SimpleApp) buildService() (corev1.Service, error) {
 	servicePorts := make([]corev1.ServicePort, 0, len(sa.Spec.Ports))
 outer:
 	for _, saPort := range sa.Spec.Ports {
@@ -251,7 +251,7 @@ outer:
 	return service, nil
 }
 
-func (sa SimpleApp) labels() map[string]string {
+func (sa *SimpleApp) labels() map[string]string {
 	labels := map[string]string{
 		"app":          sa.Metadata.Name,
 		managedByLabel: managedByValue,
@@ -259,7 +259,7 @@ func (sa SimpleApp) labels() map[string]string {
 	return labels
 }
 
-func (sa SimpleApp) buildDeployment() (appsv1.Deployment, error) {
+func (sa *SimpleApp) buildDeployment() (appsv1.Deployment, error) {
 	ports := make([]corev1.ContainerPort, 0, len(sa.Spec.Ports))
 	for _, saPort := range sa.Spec.Ports {
 		port := corev1.ContainerPort{
@@ -321,7 +321,7 @@ outer:
 	return deployment, nil
 }
 
-func (sa SimpleApp) makeVolume(saVolume simpleAppVolume) (corev1.Volume, corev1.VolumeMount, error) {
+func (sa *SimpleApp) makeVolume(saVolume simpleAppVolume) (corev1.Volume, corev1.VolumeMount, error) {
 	// Use a simplified version of k8s.io/pkg/controller/ ComputeHash
 	volName := fmt.Sprintf("vol-%s", rand.SafeEncodeString(fmt.Sprintf("%x", crc32.ChecksumIEEE([]byte(saVolume.MountPath)))))
 	volume := corev1.Volume{
@@ -406,7 +406,7 @@ func (sa SimpleApp) delete(clientset *kubernetes.Clientset) error {
 	return nil
 }
 
-func (sa SimpleApp) fixPorts(clientset *kubernetes.Clientset) error {
+func (sa *SimpleApp) fixPorts(clientset *kubernetes.Clientset) error {
 	newPorts := make([]simpleAppPort, 0)
 outer:
 	for _, port := range sa.Spec.Ports {
@@ -433,7 +433,7 @@ outer:
 	return nil
 }
 
-func (sa SimpleApp) fixVolumes(clientset *kubernetes.Clientset) error {
+func (sa *SimpleApp) fixVolumes(clientset *kubernetes.Clientset) error {
 	newVolumes := make([]simpleAppVolume, 0)
 outer:
 	for _, volume := range sa.Spec.Volumes {
