@@ -110,13 +110,13 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if !ok || managedBy != managedByValue {
 			return fmt.Errorf("found Deployment %v.%v not managed by us", oldDeployment.ObjectMeta.Namespace, oldDeployment.ObjectMeta.Name)
 		}
-		log.Printf("Would update Deployment %v.%v", oldDeployment.ObjectMeta.Namespace, oldDeployment.ObjectMeta.Name)
+
 		newDeployment, err := sa.buildDeployment()
 		if err != nil {
 			return err
 		}
 		if !utils.DeploymentEqual(newDeployment, *oldDeployment) {
-			log.Printf("Changed")
+			log.Printf("Deployment %v.%v changed", oldDeployment.ObjectMeta.Namespace, oldDeployment.ObjectMeta.Name)
 		}
 	}
 
@@ -137,7 +137,11 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if !ok || managedBy != managedByValue {
 			return fmt.Errorf("found Service %v.%v not managed by us", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
 		}
-		log.Printf("Would update Service %v.%v", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
+
+		newService := sa.buildService()
+		if !utils.ServicesEqual(newService, *oldService) {
+			log.Printf("Service %v.%v changed", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
+		}
 	}
 	return nil
 }

@@ -61,6 +61,29 @@ func DeploymentEqual(d1, d2 appsv1.Deployment) bool {
 	return true
 }
 
+func ServicesEqual(s1, s2 corev1.Service) bool {
+	if s1.Spec.Type != s2.Spec.Type {
+		return false
+	}
+	if len(s1.Spec.Selector) != len(s2.Spec.Selector) {
+		return false
+	}
+	for key, value := range s1.Spec.Selector {
+		if s2.Spec.Selector[key] != value {
+			return false
+		}
+	}
+	if len(s1.Spec.Ports) != len(s2.Spec.Ports) {
+		return false
+	}
+	for i, p := range s1.Spec.Ports {
+		if !portsEqual(s2.Spec.Ports[i], p) {
+			return false
+		}
+	}
+	return true
+}
+
 func volumesEqual(v1, v2 corev1.Volume) bool {
 	if v1.Name != v2.Name {
 		return false
@@ -184,6 +207,22 @@ func volumesEqual(v1, v2 corev1.Volume) bool {
 		}
 	}
 
+	return true
+}
+
+func portsEqual(p1, p2 corev1.ServicePort) bool {
+	if p1.Name != p2.Name {
+		return false
+	}
+	if p1.Protocol != p2.Protocol {
+		return false
+	}
+	if p1.Port != p2.Port {
+		return false
+	}
+	if p1.TargetPort != p2.TargetPort {
+		return false
+	}
 	return true
 }
 
