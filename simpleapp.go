@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"log"
@@ -126,6 +127,13 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if err != nil {
 			return err
 		}
+		if len(service.Spec.Ports) != len(sa.Spec.Ports) {
+			// We have to drop the duplicate port(s) from the SimpleApp
+			err := sa.fixPorts(clientset)
+			if err != nil {
+				return err
+			}
+		}
 		newService, err := clientset.CoreV1().Services(sa.Metadata.Namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 		if err != nil {
 			return err
@@ -143,6 +151,13 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		if err != nil {
 			return nil
 		}
+		if len(newService.Spec.Ports) != len(sa.Spec.Ports) {
+			// As above, we have to drop the duplicate port(s) from the SimpleApp
+			err := sa.fixPorts(clientset)
+			if err != nil {
+				return err
+			}
+		}
 		if !utils.ServicesEqual(newService, *oldService) {
 			_, err = clientset.CoreV1().Services(oldService.ObjectMeta.Namespace).Update(context.TODO(), &newService, metav1.UpdateOptions{})
 			if err != nil {
@@ -156,7 +171,14 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 
 func (sa SimpleApp) buildService() (corev1.Service, error) {
 	servicePorts := make([]corev1.ServicePort, 0, len(sa.Spec.Ports))
+outer:
 	for _, saPort := range sa.Spec.Ports {
+		// Check we are not receiving a duplicate HostPort as Service would reject it
+		for _, sp := range servicePorts {
+			if saPort.Protocol == sp.Protocol && saPort.HostPort == sp.Port {
+				continue outer
+			}
+		}
 		// Spec forces non-empty names if more than 1 port defined
 		portName := saPort.Name
 		if len(sa.Spec.Ports) > 1 && saPort.Name == "" {
@@ -361,5 +383,32 @@ func (sa SimpleApp) delete(clientset *kubernetes.Clientset) error {
 		return err
 	}
 	log.Printf("Deleted Service %v.%v", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
+	return nil
+}
+
+func (sa SimpleApp) fixPorts(clientset *kubernetes.Clientset) error {
+	newPorts := make([]simpleAppPort, 0)
+outer:
+	for _, port := range sa.Spec.Ports {
+		for _, stored := range newPorts {
+			if port.HostPort == stored.HostPort && port.Protocol == stored.Protocol {
+				continue outer
+			}
+		}
+		newPorts = append(newPorts, port)
+	}
+
+	sa.Spec.Ports = newPorts
+
+	payload, err := json.Marshal(sa)
+	if err != nil {
+		return err
+	}
+	log.Printf("Going to update SimpleApp %v.%v", sa.Metadata.Namespace, sa.Metadata.Name)
+	result := clientset.RESTClient().Put().AbsPath("/apis/" + resourcePath).Namespace(sa.Metadata.Namespace).Resource(plural).Name(sa.Metadata.Name).Body(payload).Do(context.TODO())
+	if result.Error() != nil {
+		log.Print("Update errored")
+		return result.Error()
+	}
 	return nil
 }
