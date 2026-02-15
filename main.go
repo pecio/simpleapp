@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -22,11 +24,12 @@ func main() {
 	}
 
 	// Get our namespace
-	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	namespaceBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("Starting SimpleApp controller in namespace %v", string(namespace))
+	namespace := string(namespaceBytes)
+	log.Printf("Starting SimpleApp controller in namespace %v", namespace)
 
 	oac := clientset.OpenAPIV3()
 	if oac == nil {
@@ -45,7 +48,7 @@ func main() {
 	simpleApps := make(map[string]SimpleApp, 0)
 
 	for {
-		result := clientset.RESTClient().Get().AbsPath("/apis/" + resourcePath).Namespace(string(namespace)).Resource(plural).Do(context.TODO())
+		result := clientset.RESTClient().Get().AbsPath("/apis/" + resourcePath).Namespace(namespace).Resource(plural).Do(context.TODO())
 		if result.Error() != nil {
 			log.Fatal(result.Error())
 		}
@@ -58,6 +61,19 @@ func main() {
 		err = json.Unmarshal(content, &simpleAppList)
 		if err != nil {
 			log.Fatal(err)
+		}
+
+		labelSelector := labels.Set(map[string]string{managedByLabel: managedByValue}).String()
+		// Fetch managed Deployments
+		deployments, err := clientset.AppsV1().Deployments(namespace).List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			log.Fatalf("Got %v listing Deployments", err)
+		}
+
+		// Fetch managed services
+		services, err := clientset.CoreV1().Services(namespace).List(context.TODO(), metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			log.Fatalf("Got %v listing Services", err)
 		}
 
 		// Store the list of previously existing apps
@@ -91,6 +107,36 @@ func main() {
 				log.Printf("Got %v deleting %v", err, simpleApps[name].Metadata.Name)
 			}
 			delete(simpleApps, name)
+		}
+
+		// Reap orphan Deployments
+	deployments:
+		for _, deployment := range deployments.Items {
+			for simpleAppName := range simpleApps {
+				if deployment.Name == simpleAppName {
+					continue deployments
+				}
+			}
+			log.Printf("Reaping orphan Deployment %v.%v", deployment.Namespace, deployment.Name)
+			err := clientset.AppsV1().Deployments(namespace).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
+			if err != nil {
+				log.Printf("Got %v deleting Deployment %v.%v", deployment.Namespace, deployment.Name)
+			}
+		}
+
+		// Reap orphan Services
+	services:
+		for _, service := range services.Items {
+			for simpleAppName := range simpleApps {
+				if service.Name == simpleAppName {
+					continue services
+				}
+			}
+			log.Printf("Reaping orphan Service %v.%v", service.Namespace, service.Name)
+			err := clientset.CoreV1().Services(namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
+			if err != nil {
+				log.Printf("Got %v deleting Service %v.%v", service.Namespace, service.Name)
+			}
 		}
 
 		time.Sleep(10 * time.Second)
