@@ -237,12 +237,20 @@ func (sa *SimpleApp) labels() map[string]string {
 }
 
 func (sa *SimpleApp) buildDeployment() (appsv1.Deployment, error) {
+	// If there are duplicate ContanerPorts, we will remove them silently.
+	// This prevents a warning and an ugly configuration.
 	ports := make([]corev1.ContainerPort, 0, len(sa.Spec.Ports))
+outer:
 	for _, saPort := range sa.Spec.Ports {
 		port := corev1.ContainerPort{
 			ContainerPort: saPort.ContainerPort,
 			Name:          saPort.Name,
 			Protocol:      saPort.Protocol,
+		}
+		for _, p := range ports {
+			if port.ContainerPort == p.ContainerPort {
+				continue outer
+			}
 		}
 		ports = append(ports, port)
 	}
