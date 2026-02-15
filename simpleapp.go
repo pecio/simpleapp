@@ -3,15 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"hash/crc32"
 	"log"
 
-	"github.com/google/uuid"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -201,7 +202,8 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 }
 
 func (sa SimpleApp) makeVolume(saVolume simpleAppVolume) (corev1.Volume, corev1.VolumeMount, error) {
-	volName := uuid.NewSHA1(uuid.Max, []byte(saVolume.MountPath)).String()
+	// Use a simplified version of k8s.io/pkg/controller/ ComputeHash
+	volName := fmt.Sprintf("vol-%s", rand.SafeEncodeString(fmt.Sprintf("%x", crc32.ChecksumIEEE([]byte(saVolume.MountPath)))))
 	volume := corev1.Volume{
 		Name: volName,
 	}
