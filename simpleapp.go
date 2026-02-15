@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
+	"strings"
 
 	"github.com/pecio/simpleapp/utils"
 	appsv1 "k8s.io/api/apps/v1"
@@ -149,15 +150,21 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 func (sa SimpleApp) buildService() corev1.Service {
 	servicePorts := make([]corev1.ServicePort, 0, len(sa.Spec.Ports))
 	for _, saPort := range sa.Spec.Ports {
-		servicePort := corev1.ServicePort{
-			Name:     saPort.Name,
-			Protocol: saPort.Protocol,
-			Port:     saPort.HostPort,
+		// Spec forces non-empty names if more than 1 port defined
+		portName := saPort.Name
+		if len(sa.Spec.Ports) > 1 && saPort.Name == "" {
+			if saPort.Protocol == "" {
+				portName = fmt.Sprintf("tcp-%s", saPort.ContainerPort)
+			} else {
+				portName = strings.ToLower(fmt.Sprintf("%s-%d", saPort.Protocol, saPort.ContainerPort))
+			}
 		}
-		if saPort.Name != "" {
-			servicePort.TargetPort = intstr.FromString(saPort.Name)
-		} else {
-			servicePort.TargetPort = intstr.FromInt32(saPort.ContainerPort)
+
+		servicePort := corev1.ServicePort{
+			Name:       portName,
+			Protocol:   saPort.Protocol,
+			Port:       saPort.HostPort,
+			TargetPort: intstr.FromInt32(saPort.ContainerPort),
 		}
 		servicePorts = append(servicePorts, servicePort)
 	}
