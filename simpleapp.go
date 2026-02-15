@@ -89,65 +89,14 @@ type simpleAppVolumeCsi struct {
 }
 
 func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
-	labels := map[string]string{
-		"app":          sa.Metadata.Name,
-		managedByLabel: managedByValue,
-	}
 	// Check if Deployment exists
 	oldDeployment, err := clientset.AppsV1().Deployments(sa.Metadata.Namespace).Get(context.TODO(), sa.Metadata.Name, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
-		ports := make([]corev1.ContainerPort, 0, len(sa.Spec.Ports))
-		for _, saPort := range sa.Spec.Ports {
-			port := corev1.ContainerPort{
-				ContainerPort: saPort.ContainerPort,
-				Name:          saPort.Name,
-				Protocol:      saPort.Protocol,
-			}
-			ports = append(ports, port)
+		deployment, err := sa.buildDeployment()
+		if err != nil {
+			return err
 		}
-		volumes := make([]corev1.Volume, 0, len(sa.Spec.Volumes))
-		volumeMounts := make([]corev1.VolumeMount, 0, len(sa.Spec.Volumes))
-		for _, saVolume := range sa.Spec.Volumes {
-			volume, volumeMount, err := sa.makeVolume(saVolume)
-			if err != nil {
-				return err
-			}
-			volumes = append(volumes, volume)
-			volumeMounts = append(volumeMounts, volumeMount)
-		}
-		podSpec := corev1.PodSpec{
-			Containers: []corev1.Container{
-				corev1.Container{
-					Name:         sa.Metadata.Name,
-					Image:        sa.Spec.Image,
-					Ports:        ports,
-					VolumeMounts: volumeMounts,
-					Env:          sa.Spec.Env,
-				},
-			},
-			Volumes: volumes,
-		}
-		selector := metav1.LabelSelector{}
-		metav1.AddLabelToSelector(&selector, "app", sa.Metadata.Name)
-		metav1.AddLabelToSelector(&selector, managedByLabel, managedByValue)
-		deploymentSpec := appsv1.DeploymentSpec{
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: podSpec,
-			},
-			Selector: &selector,
-			Replicas: sa.Spec.Replicas,
-		}
-		deployment := appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   sa.Metadata.Name,
-				Labels: labels,
-			},
-			Spec: deploymentSpec,
-		}
-		_, err := clientset.AppsV1().Deployments(sa.Metadata.Namespace).Create(context.Background(), &deployment, metav1.CreateOptions{})
+		_, err = clientset.AppsV1().Deployments(sa.Metadata.Namespace).Create(context.Background(), &deployment, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -185,10 +134,10 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: sa.Metadata.Namespace,
 				Name:      sa.Metadata.Name,
-				Labels:    labels,
+				Labels:    sa.labels(),
 			},
 			Spec: corev1.ServiceSpec{
-				Selector: labels,
+				Selector: sa.labels(),
 				Ports:    servicePorts,
 				Type:     corev1.ServiceTypeNodePort,
 			},
@@ -208,6 +157,69 @@ func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 		log.Printf("Would update Service %v.%v", oldService.ObjectMeta.Namespace, oldService.ObjectMeta.Name)
 	}
 	return nil
+}
+
+func (sa SimpleApp) labels() map[string]string {
+	labels := map[string]string{
+		"app":          sa.Metadata.Name,
+		managedByLabel: managedByValue,
+	}
+	return labels
+}
+
+func (sa SimpleApp) buildDeployment() (appsv1.Deployment, error) {
+	ports := make([]corev1.ContainerPort, 0, len(sa.Spec.Ports))
+	for _, saPort := range sa.Spec.Ports {
+		port := corev1.ContainerPort{
+			ContainerPort: saPort.ContainerPort,
+			Name:          saPort.Name,
+			Protocol:      saPort.Protocol,
+		}
+		ports = append(ports, port)
+	}
+	volumes := make([]corev1.Volume, 0, len(sa.Spec.Volumes))
+	volumeMounts := make([]corev1.VolumeMount, 0, len(sa.Spec.Volumes))
+	for _, saVolume := range sa.Spec.Volumes {
+		volume, volumeMount, err := sa.makeVolume(saVolume)
+		if err != nil {
+			return appsv1.Deployment{}, err
+		}
+		volumes = append(volumes, volume)
+		volumeMounts = append(volumeMounts, volumeMount)
+	}
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{
+			corev1.Container{
+				Name:         sa.Metadata.Name,
+				Image:        sa.Spec.Image,
+				Ports:        ports,
+				VolumeMounts: volumeMounts,
+				Env:          sa.Spec.Env,
+			},
+		},
+		Volumes: volumes,
+	}
+	selector := metav1.LabelSelector{}
+	metav1.AddLabelToSelector(&selector, "app", sa.Metadata.Name)
+	metav1.AddLabelToSelector(&selector, managedByLabel, managedByValue)
+	deploymentSpec := appsv1.DeploymentSpec{
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: sa.labels(),
+			},
+			Spec: podSpec,
+		},
+		Selector: &selector,
+		Replicas: sa.Spec.Replicas,
+	}
+	deployment := appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   sa.Metadata.Name,
+			Labels: sa.labels(),
+		},
+		Spec: deploymentSpec,
+	}
+	return deployment, nil
 }
 
 func (sa SimpleApp) makeVolume(saVolume simpleAppVolume) (corev1.Volume, corev1.VolumeMount, error) {
