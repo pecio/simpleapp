@@ -60,6 +60,7 @@ type simpleAppVolume struct {
 	ConfigMap             *simpleAppVolumeConfigMapOrSecret     `json:"configMap,omitempty"`
 	PersistentVolumeClaim *simpleAppVolumePersistentVolumeClaim `json:"persistentVolumeClaim,omitempty"`
 	Secret                *simpleAppVolumeConfigMapOrSecret     `json:"secret,omitempty"`
+	CSI                   *corev1.CSIVolumeSource               `json:"csi,omitempty"`
 }
 
 type simpleAppVolumeEmptyDir struct {
@@ -76,7 +77,15 @@ type simpleAppVolumeConfigMapOrSecret struct {
 
 type simpleAppVolumePersistentVolumeClaim struct {
 	ClaimName string `json:"claimName"`
-	ReadOnly  bool   `json:"readOnly,omitempty"`
+	ReadOnly  *bool  `json:"readOnly,omitempty"`
+}
+
+type simpleAppVolumeCsi struct {
+	Driver               string                       `json:"driver"`
+	FsType               *string                      `json:"fstype,omiteempty"`
+	NodePublishSecretRef *corev1.LocalObjectReference `json:"nodePublishSecretRef,omitempty"`
+	ReadOnly             *bool                        `json:"readOnly,omitempty"`
+	VolumeAttributes     map[string]string            `json:"volumeAttributes,omitempty"`
 }
 
 func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
@@ -224,7 +233,9 @@ func (sa SimpleApp) makeVolume(saVolume simpleAppVolume) (corev1.Volume, corev1.
 	} else if saVolume.PersistentVolumeClaim != nil {
 		persistentVolumeClaimVolumeSource := corev1.PersistentVolumeClaimVolumeSource{
 			ClaimName: saVolume.PersistentVolumeClaim.ClaimName,
-			ReadOnly:  saVolume.PersistentVolumeClaim.ReadOnly,
+		}
+		if saVolume.PersistentVolumeClaim.ReadOnly != nil {
+			persistentVolumeClaimVolumeSource.ReadOnly = *saVolume.PersistentVolumeClaim.ReadOnly
 		}
 		volume.PersistentVolumeClaim = &persistentVolumeClaimVolumeSource
 	} else if saVolume.Secret != nil {
@@ -235,6 +246,8 @@ func (sa SimpleApp) makeVolume(saVolume simpleAppVolume) (corev1.Volume, corev1.
 			Optional:    saVolume.Secret.Optional,
 		}
 		volume.Secret = &secretVolumeSource
+	} else if saVolume.CSI != nil {
+		volume.CSI = saVolume.CSI
 	} else {
 		return corev1.Volume{}, corev1.VolumeMount{}, fmt.Errorf("volume for path %v in %v.%v does not have type", saVolume.MountPath, sa.Metadata.Namespace, sa.Metadata.Name)
 	}

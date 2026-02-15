@@ -229,6 +229,43 @@ spec:
                             description: >
                               Specify whether the Secret or its values must be defined.
                             default: false
+                      csi:
+                        type: object
+                        description: >
+                          (Container Storage Interface) represents ephemeral storage that is
+                          handled by certain external CSI drivers.
+                        properties:
+                          driver:
+                            type: string
+                            description: >
+                              Name of the CSI driver that handles this volume.
+                          fsType:
+                            type: string
+                            description: >
+                              Filesystem type to mount.
+                          nodePublishSecretRef:
+                            type: object
+                            description: >
+                              A reference to the secret object containing sensitive information
+                              to pass to the CSI driver to complete the CSINodePublishVolume and
+                              NodeUnpublishVolume calls.
+                            properties:
+                              name:
+                                type: string
+                                description: >
+                                  Name of the referent.
+                            required:
+                              - name
+                          readOnly:
+                            type: boolean
+                            description: >
+                              Read-only configuration for the volume. Defaults to false.
+                          volumeAttributes:
+                            type: object
+                            description: >
+                              Driver-specific properties that are passed to the CSI driver.
+                        required:
+                          - driver
                     oneOf:
                       - required:
                           - mountPath
@@ -242,6 +279,9 @@ spec:
                       - required:
                           - mountPath
                           - secret
+                      - required:
+                          - mountPath
+                          - csi
               required:
                 - image
 
