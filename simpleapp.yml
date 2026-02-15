@@ -353,3 +353,6 @@ spec:
           requests:
             memory: "64Mi"
             cpu: "250m"
+        securityContext:
+          runAsUser: 10000
+          runAsGroup: 10000
