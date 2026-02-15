@@ -81,14 +81,6 @@ type simpleAppVolumePersistentVolumeClaim struct {
 	ReadOnly  *bool  `json:"readOnly,omitempty"`
 }
 
-type simpleAppVolumeCsi struct {
-	Driver               string                       `json:"driver"`
-	FsType               *string                      `json:"fstype,omiteempty"`
-	NodePublishSecretRef *corev1.LocalObjectReference `json:"nodePublishSecretRef,omitempty"`
-	ReadOnly             *bool                        `json:"readOnly,omitempty"`
-	VolumeAttributes     map[string]string            `json:"volumeAttributes,omitempty"`
-}
-
 func (sa SimpleApp) createOrUpdate(clientset *kubernetes.Clientset) error {
 	// Check if Deployment exists
 	oldDeployment, err := clientset.AppsV1().Deployments(sa.Metadata.Namespace).Get(context.TODO(), sa.Metadata.Name, metav1.GetOptions{})
