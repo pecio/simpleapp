@@ -18,6 +18,9 @@ import (
 const (
 	managedByLabel = "app.kubernetes.io/managed-by"
 	managedByValue = "simpleapp"
+	resourcePath   = "apps.raulpedroche.es/v1alpha1"
+	singular       = "SimpleApp"
+	plural         = "SimpleApps"
 )
 
 type SimpleAppList struct {

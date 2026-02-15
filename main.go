@@ -37,15 +37,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rp := paths["apis/apps.raulpedroche.es/v1alpha1"]
+	rp := paths["apis/"+resourcePath]
 	if rp == nil {
-		log.Fatal("Resource Path for apps.raulpedroche.es/v1alpha1 not found")
+		log.Fatalf("Resource Path for %v not found", resourcePath)
 	}
 
 	simpleApps := make(map[string]SimpleApp, 0)
 
 	for {
-		result := clientset.RESTClient().Get().AbsPath(`/apis/apps.raulpedroche.es/v1alpha1`).Namespace(string(namespace)).Resource("SimpleApps").Do(context.TODO())
+		result := clientset.RESTClient().Get().AbsPath("/apis/" + resourcePath).Namespace(string(namespace)).Resource(plural).Do(context.TODO())
 		if result.Error() != nil {
 			log.Fatal(result.Error())
 		}
