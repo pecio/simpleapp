@@ -60,7 +60,7 @@ type simpleAppPort struct {
 
 type simpleAppVolume struct {
 	MountPath             string                                `json:"mountPath"`
-	EmptyDir              *simpleAppVolumeEmptyDir              `json:"emptydir,omitempty"`
+	EmptyDir              *simpleAppVolumeEmptyDir              `json:"emptyDir,omitempty"`
 	ConfigMap             *simpleAppVolumeConfigMapOrSecret     `json:"configMap,omitempty"`
 	PersistentVolumeClaim *simpleAppVolumePersistentVolumeClaim `json:"persistentVolumeClaim,omitempty"`
 	Secret                *simpleAppVolumeConfigMapOrSecret     `json:"secret,omitempty"`
