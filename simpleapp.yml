@@ -22,6 +22,16 @@ spec:
                   type: string
                   description: >
                     Container image name.
+                serviceType:
+                  type: string
+                  description: >
+                    Type of the service to create. Must be ClusterIP, NodePort, or LoadBalancer. Defaults to
+                    ClusterIP.
+                  enum:
+                    - ClusterIP
+                    - NodePort
+                    - LoadBalancer
+                  default: ClusterIP
                 ports:
                   type: array
                   description: >

@@ -43,11 +43,12 @@ type SimpleApp struct {
 }
 
 type simpleAppSpec struct {
-	Image    string            `json:"image"`
-	Replicas *int32            `json:"replicas,omitempty"`
-	Ports    []simpleAppPort   `json:"ports,omitempty"`
-	Env      []corev1.EnvVar   `json:"env,omitempty"`
-	Volumes  []simpleAppVolume `json:"volumes,omitempty"`
+	Image       string             `json:"image"`
+	Replicas    *int32             `json:"replicas,omitempty"`
+	ServiceType corev1.ServiceType `json:"serviceType"`
+	Ports       []simpleAppPort    `json:"ports,omitempty"`
+	Env         []corev1.EnvVar    `json:"env,omitempty"`
+	Volumes     []simpleAppVolume  `json:"volumes,omitempty"`
 }
 
 type simpleAppPort struct {
@@ -196,7 +197,7 @@ func (sa *SimpleApp) buildService() (corev1.Service, error) {
 		Spec: corev1.ServiceSpec{
 			Selector: sa.labels(),
 			Ports:    servicePorts,
-			Type:     corev1.ServiceTypeNodePort,
+			Type:     sa.Spec.ServiceType,
 		},
 	}
 	return service, nil
