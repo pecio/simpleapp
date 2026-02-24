@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
-	"regexp"
 	"strings"
 
 	"github.com/pecio/simpleapp/utils"
@@ -171,37 +170,12 @@ func (sa *SimpleApp) buildService() (corev1.Service, error) {
 
 	for _, saPort := range sa.Spec.Ports {
 		// Spec forces non-empty names if more than 1 port defined
-		portName := saPort.Name
+		portName := fmt.Sprintf("u-%.13v", saPort.Name)
 		if len(sa.Spec.Ports) > 1 && saPort.Name == "" {
 			if saPort.Protocol == "" {
-				portName = fmt.Sprintf("tcp-%s", saPort.ContainerPort)
+				portName = fmt.Sprintf("a-tcp-%d-%d", saPort.HostPort, saPort.ContainerPort)
 			} else {
-				portName = strings.ToLower(fmt.Sprintf("%s-%d", saPort.Protocol, saPort.ContainerPort))
-			}
-			// Check we have not generated a duplicate name
-			for _, sp := range servicePorts {
-				if portName == sp.Name {
-					// Add b if it ends in a digit, increase end letter if it ends in a letter
-					// That is "tcp-443" -> "tcp-443b", "tcp-443b" -> "tcp-443c"
-					matched, err := regexp.MatchString("[0-9]$", portName)
-					if err != nil {
-						return corev1.Service{}, err
-					}
-					if matched {
-						portName = portName + "b"
-					} else {
-						// This does support UTF-8 but we do not need it
-						last := portName[len(portName)-1:][0] + 1
-						// Safeguard: use hash if we have surpassed 'z'
-						if last > 'z' {
-							// The following should be unique as we have removed duplicate HostPorts
-							suffix := rand.SafeEncodeString(fmt.Sprintf("%s-%d-%d", saPort.Protocol, saPort.HostPort, saPort.ContainerPort))
-							portName = fmt.Sprintf("%s%s", portName[:len(portName)-1], suffix)
-						} else {
-							portName = fmt.Sprintf("%s%c", portName[:len(portName)-1], last)
-						}
-					}
-				}
+				portName = strings.ToLower(fmt.Sprintf("a-%s-%d-%d", saPort.Protocol, saPort.HostPort, saPort.ContainerPort))
 			}
 		}
 
