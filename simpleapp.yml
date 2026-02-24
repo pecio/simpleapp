@@ -33,6 +33,7 @@ spec:
                         type: string
                         description: >
                           If specified, this must be an IANA_SVC_NAME and unique within the pod.
+                        pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
                       hostPort:
                         type: integer
                         description: >

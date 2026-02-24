@@ -365,6 +365,11 @@ outer:
 	for _, port := range sa.Spec.Ports {
 		for _, stored := range newPorts {
 			if port.HostPort == stored.HostPort && port.Protocol == stored.Protocol {
+				log.Printf("Found duplicate port %v/%v in SimpleApp %v.%v, removing it", port.HostPort, port.Protocol, sa.Metadata.Namespace, sa.Metadata.Name)
+				continue outer
+			}
+			if port.Name != "" && fmt.Sprintf("%.13v", port.Name) == fmt.Sprintf("%.13v", stored.Name) {
+				log.Printf("Found duplicate port name %v in SimpleApp %v.%v, removing it", port.Name, sa.Metadata.Namespace, sa.Metadata.Name)
 				continue outer
 			}
 		}
@@ -375,7 +380,7 @@ outer:
 		return false
 	}
 
-	log.Printf("Removing %v duplicate port(s) from SimpleApp %v.%v", len(sa.Spec.Ports)-len(newPorts), sa.Metadata.Namespace, sa.Metadata.Name)
+	log.Printf("Removed %v duplicate port(s) from SimpleApp %v.%v", len(sa.Spec.Ports)-len(newPorts), sa.Metadata.Namespace, sa.Metadata.Name)
 	sa.Spec.Ports = newPorts
 
 	return true
