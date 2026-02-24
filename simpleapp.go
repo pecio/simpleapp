@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
-	"regexp"
 	"strings"
 
 	"github.com/pecio/simpleapp/utils"
@@ -171,37 +170,12 @@ func (sa *SimpleApp) buildService() (corev1.Service, error) {
 
 	for _, saPort := range sa.Spec.Ports {
 		// Spec forces non-empty names if more than 1 port defined
-		portName := saPort.Name
+		portName := fmt.Sprintf("u-%.13v", saPort.Name)
 		if len(sa.Spec.Ports) > 1 && saPort.Name == "" {
 			if saPort.Protocol == "" {
-				portName = fmt.Sprintf("tcp-%s", saPort.ContainerPort)
+				portName = fmt.Sprintf("a-tcp-%d-%d", saPort.HostPort, saPort.ContainerPort)
 			} else {
-				portName = strings.ToLower(fmt.Sprintf("%s-%d", saPort.Protocol, saPort.ContainerPort))
-			}
-			// Check we have not generated a duplicate name
-			for _, sp := range servicePorts {
-				if portName == sp.Name {
-					// Add b if it ends in a digit, increase end letter if it ends in a letter
-					// That is "tcp-443" -> "tcp-443b", "tcp-443b" -> "tcp-443c"
-					matched, err := regexp.MatchString("[0-9]$", portName)
-					if err != nil {
-						return corev1.Service{}, err
-					}
-					if matched {
-						portName = portName + "b"
-					} else {
-						// This does support UTF-8 but we do not need it
-						last := portName[len(portName)-1:][0] + 1
-						// Safeguard: use hash if we have surpassed 'z'
-						if last > 'z' {
-							// The following should be unique as we have removed duplicate HostPorts
-							suffix := rand.SafeEncodeString(fmt.Sprintf("%s-%d-%d", saPort.Protocol, saPort.HostPort, saPort.ContainerPort))
-							portName = fmt.Sprintf("%s%s", portName[:len(portName)-1], suffix)
-						} else {
-							portName = fmt.Sprintf("%s%c", portName[:len(portName)-1], last)
-						}
-					}
-				}
+				portName = strings.ToLower(fmt.Sprintf("a-%s-%d-%d", saPort.Protocol, saPort.HostPort, saPort.ContainerPort))
 			}
 		}
 
@@ -391,6 +365,11 @@ outer:
 	for _, port := range sa.Spec.Ports {
 		for _, stored := range newPorts {
 			if port.HostPort == stored.HostPort && port.Protocol == stored.Protocol {
+				log.Printf("Found duplicate port %v/%v in SimpleApp %v.%v, removing it", port.HostPort, port.Protocol, sa.Metadata.Namespace, sa.Metadata.Name)
+				continue outer
+			}
+			if port.Name != "" && fmt.Sprintf("%.13v", port.Name) == fmt.Sprintf("%.13v", stored.Name) {
+				log.Printf("Found duplicate port name %v in SimpleApp %v.%v, removing it", port.Name, sa.Metadata.Namespace, sa.Metadata.Name)
 				continue outer
 			}
 		}
@@ -401,7 +380,7 @@ outer:
 		return false
 	}
 
-	log.Printf("Removing %v duplicate port(s) from SimpleApp %v.%v", len(sa.Spec.Ports)-len(newPorts), sa.Metadata.Namespace, sa.Metadata.Name)
+	log.Printf("Removed %v duplicate port(s) from SimpleApp %v.%v", len(sa.Spec.Ports)-len(newPorts), sa.Metadata.Namespace, sa.Metadata.Name)
 	sa.Spec.Ports = newPorts
 
 	return true
