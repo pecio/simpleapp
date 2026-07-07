@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM docker.io/library/golang:1.25.7 AS builder
+FROM docker.io/library/golang:1.26.3 AS builder
 
 COPY go.mod go.sum *.go /go/src/
 COPY utils/*.go /go/src/utils/
@@ -9,7 +9,6 @@ ENV CGO_ENABLED=0
 WORKDIR /go/src
 
 RUN go build -o simpleappcontroller .
-
 
 
 FROM scratch
