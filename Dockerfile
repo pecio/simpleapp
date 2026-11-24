@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM docker.io/library/golang:1.26.3 AS builder
+FROM docker.io/library/golang:1.26.11 AS builder
 
 COPY go.mod go.sum *.go /go/src/
 COPY utils/*.go /go/src/utils/

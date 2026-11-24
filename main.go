@@ -120,7 +120,7 @@ func main() {
 			log.Printf("Reaping orphan Deployment %v.%v", deployment.Namespace, deployment.Name)
 			err := clientset.AppsV1().Deployments(namespace).Delete(context.TODO(), deployment.Name, metav1.DeleteOptions{})
 			if err != nil {
-				log.Printf("Got %v deleting Deployment %v.%v", deployment.Namespace, deployment.Name)
+				log.Printf("Got %v deleting Deployment %v.%v", err, deployment.Namespace, deployment.Name)
 			}
 		}
 
@@ -135,7 +135,7 @@ func main() {
 			log.Printf("Reaping orphan Service %v.%v", service.Namespace, service.Name)
 			err := clientset.CoreV1().Services(namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 			if err != nil {
-				log.Printf("Got %v deleting Service %v.%v", service.Namespace, service.Name)
+				log.Printf("Got %v deleting Service %v.%v", err, service.Namespace, service.Name)
 			}
 		}
 
