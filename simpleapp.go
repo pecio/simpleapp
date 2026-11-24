@@ -178,6 +178,8 @@ func (sa *SimpleApp) buildService() (corev1.Service, error) {
 			} else {
 				portName = strings.ToLower(fmt.Sprintf("a-%s-%d-%d", saPort.Protocol, saPort.HostPort, saPort.ContainerPort))
 			}
+		} else if len(sa.Spec.Ports) == 1 && saPort.Name == "" {
+			portName = ""
 		}
 
 		servicePort := corev1.ServicePort{
