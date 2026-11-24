@@ -242,7 +242,7 @@ outer:
 	}
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
-			corev1.Container{
+			{
 				Name:         sa.Metadata.Name,
 				Image:        sa.Spec.Image,
 				Ports:        ports,
