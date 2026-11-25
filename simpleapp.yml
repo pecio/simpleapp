@@ -104,8 +104,10 @@ spec:
                       mountPath:
                         type: string
                         description: >
-                          Path within the container at which the volume should be mounted.
-                        pattern: '^(/[A-Za-z0-9]+)*$'
+                          Path within the container at which the volume should be mounted. Must be an absolute
+                          path whose segments contain only letters, digits, dashes, dots, and underscores; empty
+                          segments and ".." are not allowed.
+                        pattern: '^(/(\.?[A-Za-z0-9_-][A-Za-z0-9._-]*))+$'
                       emptyDir:
                         type: object
                         description: >

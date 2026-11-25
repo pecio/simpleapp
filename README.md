@@ -264,7 +264,8 @@ SimpleApp intentionally keeps a narrow scope. Consider these before using it for
 - **No leader election:** run a single controller replica, as the example manifest does.
 - **Fail-fast:** a failed resource listing terminates the process (Kubernetes restarts it), and startup fails if
   the CRD is not installed or the OpenAPI v3 endpoint is unavailable.
-- **Mount path restrictions:** the CRD requires mount paths to match `^(/[A-Za-z0-9]+)*$`, so segments may only
-  contain letters and digits (no dashes, dots, or underscores).
+- **Mount path restrictions:** the CRD requires mount paths to be absolute and match
+  `^(/(\.?[A-Za-z0-9_-][A-Za-z0-9._-]*))+$`, so segments may contain letters, digits, dashes, dots, and
+  underscores, but they must not be empty or contain `..`.
 - **Name-based association:** generated objects are matched to `SimpleApp`s by name (no owner references), so an
   unmanaged Deployment or Service with the same name blocks reconciliation.
